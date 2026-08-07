@@ -480,3 +480,11 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Banco SQLite local (artefato de execução)
+*.db
+*.db-shm
+*.db-wal
+
+# Anotacoes locais de trabalho
+docs/
