@@ -1,4 +1,4 @@
-﻿using ProductChallenge.Models;
+﻿using ProductChallenge.Domain;
 
 namespace ProductChallenge.Tests;
 
