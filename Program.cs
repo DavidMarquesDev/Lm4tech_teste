@@ -1,17 +1,29 @@
-namespace ProductChallenge
+﻿using Microsoft.EntityFrameworkCore;
+using ProductChallenge.Data;
+using ProductChallenge.ViewModels;
+using ProductChallenge.Views;
+
+namespace ProductChallenge;
+
+internal static class Program
 {
-    internal static class Program
+    [STAThread]
+    private static void Main()
     {
-        /// <summary>
-        ///  The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
+        ApplicationConfiguration.Initialize();
+
+        // DbContextOptions é imutável e pode ser compartilhado entre contextos.
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite(DatabaseLocation.ConnectionString)
+            .Options;
+
+        AppDbContext CreateContext() => new(options);
+
+        using (var context = CreateContext())
         {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
-            ApplicationConfiguration.Initialize();
-            Application.Run(new Form1());
+            context.Database.Migrate();
         }
+
+        Application.Run(new MainForm(new ProductListViewModel(CreateContext)));
     }
 }
