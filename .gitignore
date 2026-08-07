@@ -488,3 +488,6 @@ $RECYCLE.BIN/
 
 # Anotacoes locais de trabalho
 docs/
+
+# Arquivos de log gerados em execução
+logs/

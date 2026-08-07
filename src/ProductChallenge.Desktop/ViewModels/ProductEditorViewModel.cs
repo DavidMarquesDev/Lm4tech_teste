@@ -1,8 +1,8 @@
 ﻿using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ProductChallenge.Application;
-using ProductChallenge.Desktop.Common;
 using ProductChallenge.Domain;
+using ProductChallenge.Domain.Validation;
 
 namespace ProductChallenge.Desktop.ViewModels;
 
@@ -35,7 +35,7 @@ public partial class ProductEditorViewModel : ObservableObject
     private CategoryOption? _selectedCategory;
 
     [ObservableProperty]
-    private IReadOnlyList<FieldError> _errors = [];
+    private IReadOnlyList<ValidationFailure> _errors = [];
 
     public IReadOnlyList<CategoryOption> Categories => ProductCategoryCatalog.Options;
 
@@ -71,107 +71,63 @@ public partial class ProductEditorViewModel : ObservableObject
     /// </summary>
     public ProductDraft? TryBuildDraft()
     {
-        var errors = new List<FieldError>();
+        // A conversão de texto para número não é expressável como atributo, então fica aqui.
+        // Obrigatoriedade, faixa e tamanho ficam nos atributos de ProductInput.
+        var parseFailures = new List<ValidationFailure>();
 
-        var name = Name.Trim();
-        if (name.Length == 0)
+        var input = new ProductInput
         {
-            errors.Add(new FieldError(nameof(Name), "Informe o nome do produto."));
-        }
-        else if (name.Length > Product.NameMaxLength)
-        {
-            errors.Add(new FieldError(
-                nameof(Name),
-                $"O nome deve ter no máximo {Product.NameMaxLength} caracteres."));
-        }
+            Name = Name,
+            Description = Description,
+            Category = SelectedCategory?.Category,
+            Price = ParsePrice(parseFailures),
+            StockQuantity = ParseStockQuantity(parseFailures)
+        };
 
-        var description = Description.Trim();
-        if (description.Length > Product.DescriptionMaxLength)
-        {
-            errors.Add(new FieldError(
-                nameof(Description),
-                $"A descrição deve ter no máximo {Product.DescriptionMaxLength} caracteres."));
-        }
+        var failures = new List<ValidationFailure>(parseFailures);
 
-        var price = ValidatePrice(errors);
-        var stock = ValidateStockQuantity(errors);
+        failures.AddRange(DynamicValidator.Validate(input).Failures
+            .Where(failure => parseFailures.TrueForAll(
+                parsed => parsed.PropertyName != failure.PropertyName)));
 
-        if (SelectedCategory is null)
-        {
-            errors.Add(new FieldError(nameof(SelectedCategory), "Selecione uma categoria."));
-        }
+        Errors = failures;
 
-        Errors = errors;
-
-        return errors.Count > 0
-            ? null
-            : new ProductDraft(
-                name,
-                description.Length == 0 ? null : description,
-                price,
-                SelectedCategory!.Category,
-                stock);
+        return failures.Count == 0 ? input.ToDraft() : null;
     }
 
-    private decimal ValidatePrice(List<FieldError> errors)
+    private decimal? ParsePrice(List<ValidationFailure> failures)
     {
         if (string.IsNullOrWhiteSpace(Price))
         {
-            errors.Add(new FieldError(nameof(Price), "Informe o preço."));
-            return 0m;
+            return null;
         }
 
-        if (!decimal.TryParse(Price, PriceStyles, CultureInfo.CurrentCulture, out var price))
+        if (decimal.TryParse(Price, PriceStyles, CultureInfo.CurrentCulture, out var price))
         {
-            errors.Add(new FieldError(nameof(Price), "Preço inválido. Informe apenas números."));
-            return 0m;
+            return decimal.Round(price, 2, MidpointRounding.AwayFromZero);
         }
 
-        if (price <= 0m)
-        {
-            errors.Add(new FieldError(nameof(Price), "O preço deve ser maior que zero."));
-            return 0m;
-        }
+        failures.Add(new ValidationFailure(
+            nameof(ProductInput.Price), "Preço inválido. Informe apenas números."));
 
-        if (price > Product.PriceMaxValue)
-        {
-            errors.Add(new FieldError(
-                nameof(Price),
-                $"O preço não pode passar de {Product.PriceMaxValue.ToString("N2", CultureInfo.CurrentCulture)}."));
-            return 0m;
-        }
-
-        return decimal.Round(price, 2, MidpointRounding.AwayFromZero);
+        return null;
     }
 
-    private int ValidateStockQuantity(List<FieldError> errors)
+    private int? ParseStockQuantity(List<ValidationFailure> failures)
     {
         if (string.IsNullOrWhiteSpace(StockQuantity))
         {
-            errors.Add(new FieldError(nameof(StockQuantity), "Informe a quantidade em estoque."));
-            return 0;
+            return null;
         }
 
-        if (!int.TryParse(StockQuantity, NumberStyles.Integer, CultureInfo.CurrentCulture, out var stock))
+        if (int.TryParse(StockQuantity, NumberStyles.Integer, CultureInfo.CurrentCulture, out var stock))
         {
-            errors.Add(new FieldError(nameof(StockQuantity), "Estoque inválido. Informe um número inteiro."));
-            return 0;
+            return stock;
         }
 
-        if (stock < 0)
-        {
-            errors.Add(new FieldError(nameof(StockQuantity), "O estoque não pode ser negativo."));
-            return 0;
-        }
+        failures.Add(new ValidationFailure(
+            nameof(ProductInput.StockQuantity), "Estoque inválido. Informe um número inteiro."));
 
-        if (stock > Product.StockMaxValue)
-        {
-            errors.Add(new FieldError(
-                nameof(StockQuantity),
-                $"O estoque não pode passar de {Product.StockMaxValue.ToString("N0", CultureInfo.CurrentCulture)}."));
-            return 0;
-        }
-
-        return stock;
+        return null;
     }
 }

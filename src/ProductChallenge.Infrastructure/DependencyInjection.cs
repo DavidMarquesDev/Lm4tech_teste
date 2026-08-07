@@ -1,6 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ProductChallenge.Application.Abstractions;
+using ProductChallenge.Application.Messaging;
+using ProductChallenge.Application.Reporting;
+using ProductChallenge.Infrastructure.Messaging;
+using ProductChallenge.Infrastructure.Reporting;
 using ProductChallenge.Infrastructure.Persistence;
 using ProductChallenge.Infrastructure.Repositories;
 
@@ -19,6 +23,10 @@ public static class DependencyInjection
 
         services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite(connectionString));
         services.AddTransient<IProductRepository, ProductRepository>();
+        services.AddTransient<ICsvReportWriter, CsvReportWriter>();
+
+        // Registro genérico aberto: o container fecha IServiceBus<T> para qualquer mensagem.
+        services.AddSingleton(typeof(IServiceBus<>), typeof(InProcessServiceBus<>));
 
         return services;
     }

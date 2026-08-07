@@ -12,6 +12,9 @@ cadastro e gerenciamento de produtos.
 - Windows Forms com padrão MVVM
 - Entity Framework Core 8 + SQLite
 - CommunityToolkit.Mvvm (`ObservableObject`, `AsyncRelayCommand`)
+- Microsoft.Extensions.DependencyInjection e Microsoft.Extensions.Logging
+- Serilog (sink de arquivo)
+- xUnit
 
 ## Fases
 
@@ -21,30 +24,38 @@ O desafio é dividido em três fases, cada uma em sua própria branch.
 |------|--------|----------|
 | 1 — Conceitos básicos | `fase1-basico` | Concluída |
 | 2 — Padrões avançados (DI, Generics, Repository) | `fase2-avancado` | Concluída |
-| 3 — Reflection e complexidade | `fase3-complexo` | Pendente |
+| 3 — Reflection e complexidade | `fase3-complexo` | Concluída |
 
 ## Funcionalidades
 
 Tela única de cadastro com `DataGridView` para listagem e painel de edição para as operações
-de inclusão, alteração e exclusão, mais busca por nome e descrição e listagem paginada com
-10, 15, 30, 50 ou 100 itens por página.
+de inclusão, alteração e exclusão, mais busca por nome e descrição, listagem paginada com
+10, 15, 30, 50 ou 100 itens por página e exportação para CSV com escolha de colunas.
 
 ### Arquitetura
 
 ```
 src/
-├── ProductChallenge.Domain/          entidade, invariantes e normalização de busca
+├── ProductChallenge.Domain/          entidade, invariantes, categorias e busca normalizada
+│   ├── Metadata/                     atributos lidos por reflexão
+│   ├── Validation/                   DynamicValidator e uma regra por atributo
 │                                     nenhuma dependência externa
 ├── ProductChallenge.Application/     contratos e regras de aplicação
 │   ├── Abstractions/                 IRepository<T>, IProductRepository, IProductService
 │   ├── Services/ProductService.cs
-│   └── ProductDraft.cs               dados validados que entram no serviço
+│   ├── Messaging/                    IServiceBus<T> e a notificação de mudança
+│   ├── Reporting/                    catálogo de colunas e contratos de exportação
+│   ├── ProductInput.cs               o que foi digitado, com as regras em atributos
+│   └── ProductDraft.cs               o que foi aprovado, pronto para o serviço
 ├── ProductChallenge.Infrastructure/  o único projeto que conhece o Entity Framework
 │   ├── Persistence/                  AppDbContext, migrations, localização do banco
 │   ├── Repositories/                 ProductRepository
+│   ├── Messaging/                    barramento em memória e log de auditoria
+│   ├── Reporting/                    CsvReportWriter
 │   └── DependencyInjection.cs        registro e migração
 └── ProductChallenge.Desktop/         Windows Forms
-    ├── Views/  ViewModels/  Common/
+    ├── Views/  ViewModels/
+    ├── Common/                       ligação de comandos e apoio a binding
     └── Composition/                  composição da raiz de dependências
 tests/
 └── ProductChallenge.Tests/
@@ -98,6 +109,25 @@ dotnet run --project src/ProductChallenge.Desktop
 
 Ou abra `ProductChallenge.sln` no Visual Studio 2022 e execute com `F5`.
 
+### Exportação
+
+O botão **Exportar CSV** abre a escolha de colunas, permite reordená-las e grava o arquivo com
+BOM e separador da cultura, para abrir direto no Excel em português. A exportação considera o
+filtro de busca ativo.
+
+### Log
+
+As mensagens ficam em `logs/produtos-<data>.log`, ao lado do executável. A auditoria registra
+qual campo mudou, com o valor anterior e o novo, em vez de apenas dizer que houve alteração:
+
+```
+Produto 91 "Arroz integral" atualizado — Preço: 3.549,83 → 1.499,00
+Produto 92 "Monitor 27" criado — Preço: 1.899,00; Categoria: Eletrônicos; Estoque: 8
+```
+
+Exportações e exceções não tratadas também são registradas; SQL do Entity Framework é omitido
+para não afogar o arquivo.
+
 ### Dados de demonstração
 
 ```bash
@@ -120,8 +150,9 @@ dotnet ef migrations add NomeDaMigration   --project src/ProductChallenge.Infras
 dotnet test
 ```
 
-122 testes cobrindo as invariantes do domínio, a normalização de busca, a validação por campo,
-o CRUD completo, os limites da paginação e a regra de dependência entre camadas.
+182 testes cobrindo as invariantes do domínio, a normalização de busca, a validação por
+atributos, o CRUD completo, os limites da paginação, o diff da auditoria, o catálogo de colunas,
+o escape do CSV, o barramento de mensagens e a regra de dependência entre camadas.
 
 Os testes de CRUD usam **SQLite em memória** (`Filename=:memory:` com a conexão mantida aberta),
 não o provider InMemory do EF. O provider InMemory não aplica as restrições do mapeamento nem
@@ -152,13 +183,35 @@ abrir janela porque não referenciam `System.Windows.Forms`.
 - **Repositório e serviço `Transient`, ViewModel e Form `Singleton`** — ambos são sem estado e
   criam um contexto por operação, então nada obsoleto fica retido dentro do consumidor de vida
   longa.
-- **Sem `ILogger`, sem Reflection, sem Service Bus** — são requisitos da Fase 3.
-- **Validação em duas camadas** — `TryBuildDraft()` produz mensagens amigáveis por campo; as
-  verificações em `Product.SetDetails` são a rede de segurança do domínio. Uma exceção ali indica
-  regra não aplicada na entrada, não erro do usuário.
-- **Preço e estoque como texto no ViewModel** — o painel precisa espelhar o que foi digitado,
-  inclusive quando ainda não é um número. A conversão respeita a cultura corrente e aceita
-  `1.234,56`.
+- **Validação em dois mecanismos, cada um no que serve** — converter texto em número não é
+  expressável como atributo, então a conversão fica no ViewModel; obrigatoriedade, faixa e
+  tamanho ficam em atributos de `ProductInput`, interpretados por `DynamicValidator`. Os dois
+  conjuntos de erro chegam à tela pelo mesmo `ErrorProvider`.
+- **`ProductInput` e `ProductDraft` são tipos diferentes de propósito** — um representa o que foi
+  digitado, com tipos anuláveis para distinguir "não informado" de zero; o outro representa o que
+  já passou pela validação, e por isso o serviço recebe valores não anuláveis.
+- **`DynamicValidator` com uma regra por atributo** — suportar um atributo novo passa a ser
+  acrescentar uma implementação de `IValidationRule`, e não editar o validador.
+- **Reflexão com cache** — `DynamicValidator` e `ExportFieldCatalog` resolvem propriedades e
+  atributos uma vez por tipo num `ConcurrentDictionary`. Sem isso cada tentativa de salvar
+  repetiria a inspeção.
+- **`[ExportColumn]` é opt-in** — se a descoberta fosse por todas as propriedades públicas,
+  `SearchText` apareceria para o usuário escolher, e ela é coluna derivada.
+- **A exportação respeita o filtro em uso** — quem reduziu a lista a doze itens espera receber
+  doze, não o catálogo inteiro.
+- **O barramento tem dois assinantes** — a tela recarrega e a auditoria registra, sem que o
+  serviço que grava conheça nenhum dos dois. É o segundo assinante que comprova o desacoplamento;
+  com um só, o padrão seria decoração.
+- **A notificação carrega o diff, não só o verbo** — quem compara é o serviço, único ponto que vê
+  o antes e o depois; o assinante só formata. Um log que diz apenas "atualizado" não responde à
+  pergunta que se faz a ele depois: o que mudou.
+- **Log em arquivo, não em console** — num `WinExe` não existe console anexado, e o provider de
+  console descartaria tudo em silêncio. As mensagens vão para `logs/produtos-<data>.log`, com
+  rotação diária e sete dias retidos, e `Log.CloseAndFlush()` num `finally` garante que as
+  últimas linhas — justamente as de um encerramento anormal — cheguem ao disco. O `AddDebug`
+  complementa para quem roda pelo Visual Studio.
+- **O EF fica fora do arquivo** — `MinimumLevel.Override("Microsoft", Warning)`. Sem isso o log
+  afoga em SQL e o rastro da aplicação se perde no meio.
 - **Grid somente leitura** — a edição acontece no painel, sob validação. Isso elimina a classe de
   problemas de alterar a coleção enquanto uma célula está em modo de edição.
 - **`ExecuteDeleteAsync`** — remove sem materializar a entidade.
@@ -192,12 +245,14 @@ ausentes num sistema real:
 | Confirmação ao excluir | Exclusão é irreversível |
 | `.editorconfig` com `utf-8-bom` | Evita corromper acentuação ao editar em ferramentas diferentes |
 | `global.json` | Fixa a versão do SDK entre máquinas |
-| `TreatWarningsAsErrors` no Release | O projeto compila com zero avisos |
+| `TreatWarningsAsErrors` no Release | O projeto compila com zero avisos, e foi ele que pegou um `CS0108` real antes da entrega |
+| Handlers globais de exceção | Sem eles uma falha não tratada derruba a aplicação sem deixar registro |
+| Log em arquivo | A caixa de erro instrui a consultar o log; sem arquivo, seria uma promessa vazia |
 
 ### O que eu faria diferente em produção
 
 - `CancellationToken` em todos os métodos assíncronos.
-- Paginação ou carregamento virtual no grid — hoje a listagem traz todos os produtos.
+- Exportação em segundo plano com barra de progresso, para volumes muito acima de 100 itens.
 - Configuração externa (`appsettings.json`) para a connection string.
 
 ## Autor

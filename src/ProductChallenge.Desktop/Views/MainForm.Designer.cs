@@ -40,6 +40,7 @@
             this.lblTitle = new System.Windows.Forms.Label();
             this.txtSearch = new System.Windows.Forms.TextBox();
             this.lblSearch = new System.Windows.Forms.Label();
+            this.btnExport = new System.Windows.Forms.Button();
             this.pnlGrid = new System.Windows.Forms.Panel();
             this.gridProducts = new System.Windows.Forms.DataGridView();
             this.colId = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -118,6 +119,7 @@
             //
             // pnlHeader
             //
+            this.pnlHeader.Controls.Add(this.btnExport);
             this.pnlHeader.Controls.Add(this.lblTitle);
             this.pnlHeader.Controls.Add(this.lblSearch);
             this.pnlHeader.Controls.Add(this.txtSearch);
@@ -159,6 +161,20 @@
             this.txtSearch.PlaceholderText = "nome ou descrição";
             this.txtSearch.Size = new System.Drawing.Size(265, 23);
             this.txtSearch.TabIndex = 2;
+            //
+            // btnExport
+            //
+            this.btnExport.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            this.btnExport.BackColor = System.Drawing.Color.White;
+            this.btnExport.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(209)))), ((int)(((byte)(213)))), ((int)(((byte)(219)))));
+            this.btnExport.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnExport.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(31)))), ((int)(((byte)(41)))), ((int)(((byte)(55)))));
+            this.btnExport.Location = new System.Drawing.Point(216, 5);
+            this.btnExport.Name = "btnExport";
+            this.btnExport.Size = new System.Drawing.Size(132, 27);
+            this.btnExport.TabIndex = 3;
+            this.btnExport.Text = "Exportar CS&V";
+            this.btnExport.UseVisualStyleBackColor = false;
             //
             // pnlGrid
             //
@@ -740,6 +756,7 @@
         private System.Windows.Forms.Label lblTitle;
         private System.Windows.Forms.Label lblSearch;
         private System.Windows.Forms.TextBox txtSearch;
+        private System.Windows.Forms.Button btnExport;
         private System.Windows.Forms.Panel pnlGrid;
         private System.Windows.Forms.DataGridView gridProducts;
         private System.Windows.Forms.DataGridViewTextBoxColumn colId;

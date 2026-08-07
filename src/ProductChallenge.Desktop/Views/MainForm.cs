@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using ProductChallenge.Application;
 using ProductChallenge.Desktop.Common;
 using ProductChallenge.Domain;
 using ProductChallenge.Desktop.ViewModels;
@@ -8,6 +9,7 @@ namespace ProductChallenge.Desktop.Views;
 public partial class MainForm : Form
 {
     private readonly ProductListViewModel _viewModel;
+    private readonly Func<ExportColumnsDialog> _exportDialogFactory;
     private readonly BindingSource _productsBinding = new();
     private readonly BindingSource _editorBinding = new();
     private readonly BindingSource _listBinding = new();
@@ -17,19 +19,20 @@ public partial class MainForm : Form
 
     private bool _syncingCategory;
 
-    public MainForm(ProductListViewModel viewModel)
+    public MainForm(ProductListViewModel viewModel, Func<ExportColumnsDialog> exportDialogFactory)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _exportDialogFactory = exportDialogFactory ?? throw new ArgumentNullException(nameof(exportDialogFactory));
 
         InitializeComponent();
 
         _errorTargets = new Dictionary<string, Control>(StringComparer.Ordinal)
         {
-            [nameof(ProductEditorViewModel.Name)] = txtName,
-            [nameof(ProductEditorViewModel.Description)] = txtDescription,
-            [nameof(ProductEditorViewModel.SelectedCategory)] = cboCategory,
-            [nameof(ProductEditorViewModel.Price)] = txtPrice,
-            [nameof(ProductEditorViewModel.StockQuantity)] = txtStockQuantity
+            [nameof(ProductInput.Name)] = txtName,
+            [nameof(ProductInput.Description)] = txtDescription,
+            [nameof(ProductInput.Category)] = cboCategory,
+            [nameof(ProductInput.Price)] = txtPrice,
+            [nameof(ProductInput.StockQuantity)] = txtStockQuantity
         };
 
         BindGrid();
@@ -53,7 +56,7 @@ public partial class MainForm : Form
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        await _viewModel.LoadCommand.ExecuteAsync(null);
+        await _viewModel.InitializeAsync();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -136,6 +139,7 @@ public partial class MainForm : Form
         // Sem o binder: a confirmação precisa ocorrer antes do comando.
         CommandBinder.BindEnabled(btnDelete, _viewModel.DeleteCommand);
         btnDelete.Click += OnDeleteClick;
+        btnExport.Click += OnExportClick;
     }
 
     private void BindPaging()
@@ -174,6 +178,57 @@ public partial class MainForm : Form
             _viewModel.SearchTerm = txtSearch.Text;
             await _viewModel.LoadCommand.ExecuteAsync(null);
         };
+    }
+
+    private async void OnExportClick(object? sender, EventArgs e)
+    {
+        using var dialog = _exportDialogFactory();
+        dialog.LoadFields(_viewModel.GetExportableFields());
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        using var save = new SaveFileDialog
+        {
+            Title = "Salvar exportação",
+            Filter = "Arquivo CSV (*.csv)|*.csv",
+            FileName = $"produtos_{DateTime.Now:yyyy-MM-dd_HHmm}.csv",
+            DefaultExt = "csv",
+            AddExtension = true
+        };
+
+        if (save.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        btnExport.Enabled = false;
+
+        try
+        {
+            // useAsync habilita I/O realmente assíncrona no Windows.
+            await using var file = new FileStream(
+                save.FileName, FileMode.Create, FileAccess.Write, FileShare.None,
+                bufferSize: 4096, useAsync: true);
+
+            var rowCount = await _viewModel.ExportAsync(dialog.SelectedFieldNames, file);
+
+            MessageBox.Show(
+                this, $"{rowCount} produto(s) exportado(s) para:{Environment.NewLine}{save.FileName}",
+                "Exportar", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            MessageBox.Show(
+                this, $"Não foi possível exportar: {exception.Message}",
+                "Exportar", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            btnExport.Enabled = true;
+        }
     }
 
     private void OnCategorySelectionChanged(object? sender, EventArgs e)
@@ -295,14 +350,14 @@ public partial class MainForm : Form
 
         foreach (var error in _viewModel.Editor.Errors)
         {
-            if (_errorTargets.TryGetValue(error.FieldName, out var control))
+            if (_errorTargets.TryGetValue(error.PropertyName, out var control))
             {
                 errorProvider.SetError(control, error.Message);
             }
         }
 
         var firstInvalid = _viewModel.Editor.Errors
-            .Select(error => _errorTargets.TryGetValue(error.FieldName, out var control) ? control : null)
+            .Select(error => _errorTargets.TryGetValue(error.PropertyName, out var control) ? control : null)
             .FirstOrDefault(control => control is not null);
 
         firstInvalid?.Focus();

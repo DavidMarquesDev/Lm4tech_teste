@@ -1,4 +1,6 @@
-﻿namespace ProductChallenge.Domain;
+﻿using ProductChallenge.Domain.Metadata;
+
+namespace ProductChallenge.Domain;
 
 public class Product
 {
@@ -7,16 +9,22 @@ public class Product
     public const decimal PriceMaxValue = 1_000_000m;
     public const int StockMaxValue = 1_000_000;
 
+    [ExportColumn("Código", 1)]
     public int Id { get; private set; }
 
+    [ExportColumn("Produto", 2)]
     public string Name { get; private set; } = string.Empty;
 
+    [ExportColumn("Descrição", 6)]
     public string? Description { get; private set; }
 
+    [ExportColumn("Preço", 4, Format = "N2")]
     public decimal Price { get; private set; }
 
+    [ExportColumn("Categoria", 3)]
     public ProductCategory Category { get; private set; }
 
+    [ExportColumn("Estoque", 5)]
     public int StockQuantity { get; private set; }
 
     /// <summary>

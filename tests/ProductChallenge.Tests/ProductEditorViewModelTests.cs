@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using ProductChallenge.Application;
 using ProductChallenge.Domain;
 using ProductChallenge.Desktop.ViewModels;
 
@@ -37,10 +38,10 @@ public class ProductEditorViewModelTests
 
         Assert.Null(draft);
         Assert.Equal(4, editor.Errors.Count);
-        Assert.Contains(editor.Errors, e => e.FieldName == nameof(ProductEditorViewModel.Name));
-        Assert.Contains(editor.Errors, e => e.FieldName == nameof(ProductEditorViewModel.Price));
-        Assert.Contains(editor.Errors, e => e.FieldName == nameof(ProductEditorViewModel.StockQuantity));
-        Assert.Contains(editor.Errors, e => e.FieldName == nameof(ProductEditorViewModel.SelectedCategory));
+        Assert.Contains(editor.Errors, e => e.PropertyName == nameof(ProductInput.Name));
+        Assert.Contains(editor.Errors, e => e.PropertyName == nameof(ProductInput.Price));
+        Assert.Contains(editor.Errors, e => e.PropertyName == nameof(ProductInput.StockQuantity));
+        Assert.Contains(editor.Errors, e => e.PropertyName == nameof(ProductInput.Category));
     }
 
     [Theory]
@@ -56,7 +57,7 @@ public class ProductEditorViewModelTests
 
         Assert.Null(draft);
         var error = Assert.Single(editor.Errors);
-        Assert.Equal(nameof(ProductEditorViewModel.Price), error.FieldName);
+        Assert.Equal(nameof(ProductInput.Price), error.PropertyName);
     }
 
     [Theory]
@@ -85,7 +86,7 @@ public class ProductEditorViewModelTests
 
         Assert.Null(draft);
         var error = Assert.Single(editor.Errors);
-        Assert.Equal(nameof(ProductEditorViewModel.StockQuantity), error.FieldName);
+        Assert.Equal(nameof(ProductInput.StockQuantity), error.PropertyName);
     }
 
     [Fact]
@@ -175,7 +176,7 @@ public class ProductEditorViewModelTests
 
         Assert.Null(draft);
         var error = Assert.Single(editor.Errors);
-        Assert.Equal(nameof(ProductEditorViewModel.Description), error.FieldName);
+        Assert.Equal(nameof(ProductInput.Description), error.PropertyName);
     }
 
     [Fact]

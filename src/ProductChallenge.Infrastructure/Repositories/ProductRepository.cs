@@ -37,6 +37,26 @@ public sealed class ProductRepository : IProductRepository
             .ToListAsync();
     }
 
+    public async Task<IReadOnlyList<Product>> ListAsync(string term)
+    {
+        var normalizedTerm = SearchNormalizer.Normalize(term);
+
+        if (normalizedTerm.Length == 0)
+        {
+            return (await GetAllAsync()).ToList();
+        }
+
+        var pattern = $"%{normalizedTerm}%";
+
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        return await context.Products
+            .AsNoTracking()
+            .Where(product => EF.Functions.Like(product.SearchText, pattern))
+            .OrderBy(product => product.Name)
+            .ToListAsync();
+    }
+
     public async Task<PagedResult<Product>> GetPageAsync(string term, int pageNumber, int pageSize)
     {
         await using var context = await _contextFactory.CreateDbContextAsync();

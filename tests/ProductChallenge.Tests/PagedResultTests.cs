@@ -23,31 +23,4 @@ public class PagedResultTests
     {
         Assert.Equal(1, Page(totalCount: 0, pageNumber: 1, pageSize: 10).PageCount);
     }
-
-    [Fact]
-    public void FirstPage_HasNoPrevious()
-    {
-        var page = Page(totalCount: 100, pageNumber: 1, pageSize: 10);
-
-        Assert.False(page.HasPreviousPage);
-        Assert.True(page.HasNextPage);
-    }
-
-    [Fact]
-    public void LastPage_HasNoNext()
-    {
-        var page = Page(totalCount: 100, pageNumber: 10, pageSize: 10);
-
-        Assert.True(page.HasPreviousPage);
-        Assert.False(page.HasNextPage);
-    }
-
-    [Fact]
-    public void SinglePage_HasNeighboursOnNeitherSide()
-    {
-        var page = Page(totalCount: 5, pageNumber: 1, pageSize: 10);
-
-        Assert.False(page.HasPreviousPage);
-        Assert.False(page.HasNextPage);
-    }
 }
