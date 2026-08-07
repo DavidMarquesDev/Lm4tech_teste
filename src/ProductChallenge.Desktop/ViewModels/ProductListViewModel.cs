@@ -2,6 +2,7 @@
 using System.Data.Common;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ProductChallenge.Application;
 using ProductChallenge.Application.Abstractions;
 using ProductChallenge.Desktop.Common;
 using ProductChallenge.Domain;
@@ -10,6 +11,13 @@ namespace ProductChallenge.Desktop.ViewModels;
 
 public partial class ProductListViewModel : ObservableObject
 {
+    public const int DefaultPageSize = 10;
+
+    // Array concreto porque o ComboBox exige uma origem de dados que implemente IList.
+    private static readonly int[] AvailablePageSizes = [10, 15, 30, 50, 100];
+
+    public static IReadOnlyList<int> PageSizeOptions => AvailablePageSizes;
+
     private readonly IProductService _productService;
 
     [ObservableProperty]
@@ -25,6 +33,22 @@ public partial class ProductListViewModel : ObservableObject
 
     [ObservableProperty]
     private string _searchTerm = string.Empty;
+
+    [ObservableProperty]
+    private int _pageSize = DefaultPageSize;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GoToPreviousPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(GoToNextPageCommand))]
+    private int _pageNumber = 1;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GoToPreviousPageCommand))]
+    [NotifyCanExecuteChangedFor(nameof(GoToNextPageCommand))]
+    private int _pageCount = 1;
+
+    [ObservableProperty]
+    private string _pageSummary = string.Empty;
 
     public ProductListViewModel(IProductService productService)
     {
@@ -48,10 +72,14 @@ public partial class ProductListViewModel : ObservableObject
 
         try
         {
-            var products = await _productService.ListAsync(SearchTerm);
+            var page = await _productService.ListAsync(SearchTerm, PageNumber, PageSize);
 
-            Products.ReplaceAll(products);
-            StatusMessage = DescribeResult(products.Count, SearchTerm.Trim());
+            Products.ReplaceAll(page.Items);
+
+            PageNumber = page.PageNumber;
+            PageCount = page.PageCount;
+            PageSummary = $"Página {page.PageNumber} de {page.PageCount}";
+            StatusMessage = DescribeResult(page.TotalCount, SearchTerm.Trim());
         }
         catch (Exception exception) when (exception is DataAccessException or DbException)
         {
@@ -170,6 +198,30 @@ public partial class ProductListViewModel : ObservableObject
         IsBusy = false;
         await LoadAsync();
     }
+
+    [RelayCommand(CanExecute = nameof(CanGoToPreviousPage))]
+    private async Task GoToPreviousPageAsync()
+    {
+        PageNumber--;
+        await LoadAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGoToNextPage))]
+    private async Task GoToNextPageAsync()
+    {
+        PageNumber++;
+        await LoadAsync();
+    }
+
+    // Trocar o filtro ou o tamanho da página invalida a posição atual: a página 4 do resultado
+    // anterior não corresponde a nada no novo.
+    partial void OnSearchTermChanged(string value) => PageNumber = 1;
+
+    partial void OnPageSizeChanged(int value) => PageNumber = 1;
+
+    private bool CanGoToPreviousPage() => PageNumber > 1;
+
+    private bool CanGoToNextPage() => PageNumber < PageCount;
 
     private bool HasSelection() => SelectedProduct is not null;
 

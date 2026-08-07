@@ -4,7 +4,7 @@ namespace ProductChallenge.Application.Abstractions;
 
 public interface IProductService
 {
-    Task<IReadOnlyList<Product>> ListAsync(string searchTerm);
+    Task<PagedResult<Product>> ListAsync(string searchTerm, int pageNumber, int pageSize);
 
     Task CreateAsync(ProductDraft draft);
 

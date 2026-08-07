@@ -26,7 +26,8 @@ O desafio é dividido em três fases, cada uma em sua própria branch.
 ## Funcionalidades
 
 Tela única de cadastro com `DataGridView` para listagem e painel de edição para as operações
-de inclusão, alteração e exclusão, mais busca por nome e descrição.
+de inclusão, alteração e exclusão, mais busca por nome e descrição e listagem paginada com
+10, 15, 30, 50 ou 100 itens por página.
 
 ### Arquitetura
 
@@ -97,6 +98,15 @@ dotnet run --project src/ProductChallenge.Desktop
 
 Ou abra `ProductChallenge.sln` no Visual Studio 2022 e execute com `F5`.
 
+### Dados de demonstração
+
+```bash
+dotnet run --project src/ProductChallenge.Desktop -- --seed
+```
+
+Gera 100 produtos para avaliar listagem e paginação. Só grava se a tabela estiver vazia, e nunca
+roda numa execução normal.
+
 ### Migrations
 
 ```bash
@@ -110,8 +120,8 @@ dotnet ef migrations add NomeDaMigration   --project src/ProductChallenge.Infras
 dotnet test
 ```
 
-91 testes cobrindo as invariantes do domínio, a normalização de busca, a validação por campo, o
-CRUD completo e a regra de dependência entre camadas.
+122 testes cobrindo as invariantes do domínio, a normalização de busca, a validação por campo,
+o CRUD completo, os limites da paginação e a regra de dependência entre camadas.
 
 Os testes de CRUD usam **SQLite em memória** (`Filename=:memory:` com a conexão mantida aberta),
 não o provider InMemory do EF. O provider InMemory não aplica as restrições do mapeamento nem
@@ -127,8 +137,13 @@ abrir janela porque não referenciam `System.Windows.Forms`.
 - **SQLite em vez do provider InMemory** — o enunciado permite os dois. O InMemory é um dublê
   para testes: não persiste entre execuções nem permite demonstrar Migrations.
 - **`IProductRepository` além do `IRepository<T>`** — o repositório genérico cobre o CRUD, mas
-  não tem como expressar uma consulta de domínio. A busca por texto entra num contrato específico
-  em vez de virar filtro em memória sobre `GetAllAsync`, que carregaria a tabela inteira.
+  não tem como expressar uma consulta de domínio. Filtro e paginação entram num contrato
+  específico em vez de virarem trabalho em memória sobre `GetAllAsync`.
+- **`Skip`/`Take` chegam ao SQL** — a página é montada no banco, junto de um `Count` sobre o
+  mesmo filtro. Trazer tudo para depois recortar em memória anularia o ganho da paginação.
+- **A página fora da faixa é ajustada no repositório** — quem já conta o total é quem sabe qual
+  é a última página. Sem isso, filtrar ou excluir na última página deixaria a tela vazia sem
+  explicação.
 - **`IRepository<T>` transcrito do enunciado sem alterações** — sem `CancellationToken`, e o
   `Task<T>` não anulável resolvido com `KeyNotFoundException` em vez de `null`.
 - **`DataAccessException`** — a Infrastructure traduz falhas do Entity Framework para um tipo da

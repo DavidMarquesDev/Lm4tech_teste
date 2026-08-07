@@ -47,6 +47,14 @@
             this.colCategory = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.colPrice = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.colStockQuantity = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.tlpPaging = new System.Windows.Forms.TableLayoutPanel();
+            this.flpPageSize = new System.Windows.Forms.FlowLayoutPanel();
+            this.lblPageSize = new System.Windows.Forms.Label();
+            this.cboPageSize = new System.Windows.Forms.ComboBox();
+            this.flpPageNav = new System.Windows.Forms.FlowLayoutPanel();
+            this.btnNextPage = new System.Windows.Forms.Button();
+            this.lblPageSummary = new System.Windows.Forms.Label();
+            this.btnPreviousPage = new System.Windows.Forms.Button();
             this.pnlEditor = new System.Windows.Forms.Panel();
             this.tlpEditor = new System.Windows.Forms.TableLayoutPanel();
             this.lblEditorTitle = new System.Windows.Forms.Label();
@@ -74,6 +82,9 @@
             this.pnlHeader.SuspendLayout();
             this.pnlGrid.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.gridProducts)).BeginInit();
+            this.tlpPaging.SuspendLayout();
+            this.flpPageSize.SuspendLayout();
+            this.flpPageNav.SuspendLayout();
             this.pnlEditor.SuspendLayout();
             this.tlpEditor.SuspendLayout();
             this.tlpButtons.SuspendLayout();
@@ -89,15 +100,17 @@
             this.tlpRoot.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             this.tlpRoot.Controls.Add(this.pnlHeader, 0, 0);
             this.tlpRoot.Controls.Add(this.pnlGrid, 0, 1);
-            this.tlpRoot.Controls.Add(this.pnlEditor, 0, 2);
-            this.tlpRoot.Controls.Add(this.lblStatus, 0, 3);
+            this.tlpRoot.Controls.Add(this.tlpPaging, 0, 2);
+            this.tlpRoot.Controls.Add(this.pnlEditor, 0, 3);
+            this.tlpRoot.Controls.Add(this.lblStatus, 0, 4);
             this.tlpRoot.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tlpRoot.Location = new System.Drawing.Point(0, 0);
             this.tlpRoot.Name = "tlpRoot";
             this.tlpRoot.Padding = new System.Windows.Forms.Padding(20, 16, 20, 10);
-            this.tlpRoot.RowCount = 4;
+            this.tlpRoot.RowCount = 5;
             this.tlpRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
             this.tlpRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            this.tlpRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
             this.tlpRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
             this.tlpRoot.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
             this.tlpRoot.Size = new System.Drawing.Size(1020, 700);
@@ -260,6 +273,113 @@
             this.colStockQuantity.HeaderText = "Estoque";
             this.colStockQuantity.Name = "colStockQuantity";
             this.colStockQuantity.ReadOnly = true;
+            //
+            // tlpPaging
+            //
+            this.tlpPaging.AutoSize = true;
+            this.tlpPaging.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.tlpPaging.ColumnCount = 2;
+            this.tlpPaging.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
+            this.tlpPaging.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            this.tlpPaging.Controls.Add(this.flpPageSize, 0, 0);
+            this.tlpPaging.Controls.Add(this.flpPageNav, 1, 0);
+            this.tlpPaging.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.tlpPaging.Location = new System.Drawing.Point(20, 424);
+            this.tlpPaging.Margin = new System.Windows.Forms.Padding(3, 6, 3, 6);
+            this.tlpPaging.Name = "tlpPaging";
+            this.tlpPaging.RowCount = 1;
+            this.tlpPaging.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.AutoSize));
+            this.tlpPaging.Size = new System.Drawing.Size(980, 33);
+            this.tlpPaging.TabIndex = 2;
+            //
+            // flpPageSize
+            //
+            this.flpPageSize.AutoSize = true;
+            this.flpPageSize.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.flpPageSize.Controls.Add(this.lblPageSize);
+            this.flpPageSize.Controls.Add(this.cboPageSize);
+            this.flpPageSize.Location = new System.Drawing.Point(0, 0);
+            this.flpPageSize.Margin = new System.Windows.Forms.Padding(0);
+            this.flpPageSize.Name = "flpPageSize";
+            this.flpPageSize.Size = new System.Drawing.Size(190, 29);
+            this.flpPageSize.TabIndex = 0;
+            this.flpPageSize.WrapContents = false;
+            //
+            // lblPageSize
+            //
+            this.lblPageSize.AutoSize = true;
+            this.lblPageSize.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(107)))), ((int)(((byte)(114)))), ((int)(((byte)(128)))));
+            this.lblPageSize.Location = new System.Drawing.Point(0, 6);
+            this.lblPageSize.Margin = new System.Windows.Forms.Padding(0, 6, 8, 0);
+            this.lblPageSize.Name = "lblPageSize";
+            this.lblPageSize.Size = new System.Drawing.Size(105, 15);
+            this.lblPageSize.TabIndex = 0;
+            this.lblPageSize.Text = "&Itens por página";
+            //
+            // cboPageSize
+            //
+            this.cboPageSize.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cboPageSize.FormattingEnabled = true;
+            this.cboPageSize.Location = new System.Drawing.Point(113, 3);
+            this.cboPageSize.Margin = new System.Windows.Forms.Padding(0, 3, 0, 3);
+            this.cboPageSize.Name = "cboPageSize";
+            this.cboPageSize.Size = new System.Drawing.Size(72, 23);
+            this.cboPageSize.TabIndex = 1;
+            //
+            // flpPageNav
+            //
+            this.flpPageNav.AutoSize = true;
+            this.flpPageNav.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.flpPageNav.Controls.Add(this.btnNextPage);
+            this.flpPageNav.Controls.Add(this.lblPageSummary);
+            this.flpPageNav.Controls.Add(this.btnPreviousPage);
+            this.flpPageNav.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.flpPageNav.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft;
+            this.flpPageNav.Location = new System.Drawing.Point(190, 0);
+            this.flpPageNav.Margin = new System.Windows.Forms.Padding(0);
+            this.flpPageNav.Name = "flpPageNav";
+            this.flpPageNav.Size = new System.Drawing.Size(790, 33);
+            this.flpPageNav.TabIndex = 1;
+            this.flpPageNav.WrapContents = false;
+            //
+            // btnNextPage
+            //
+            this.btnNextPage.BackColor = System.Drawing.Color.White;
+            this.btnNextPage.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(209)))), ((int)(((byte)(213)))), ((int)(((byte)(219)))));
+            this.btnNextPage.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnNextPage.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(31)))), ((int)(((byte)(41)))), ((int)(((byte)(55)))));
+            this.btnNextPage.Location = new System.Drawing.Point(692, 3);
+            this.btnNextPage.Margin = new System.Windows.Forms.Padding(8, 3, 0, 3);
+            this.btnNextPage.Name = "btnNextPage";
+            this.btnNextPage.Size = new System.Drawing.Size(98, 27);
+            this.btnNextPage.TabIndex = 2;
+            this.btnNextPage.Text = "Próxima ›";
+            this.btnNextPage.UseVisualStyleBackColor = false;
+            //
+            // lblPageSummary
+            //
+            this.lblPageSummary.AutoSize = true;
+            this.lblPageSummary.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(75)))), ((int)(((byte)(85)))), ((int)(((byte)(99)))));
+            this.lblPageSummary.Location = new System.Drawing.Point(578, 9);
+            this.lblPageSummary.Margin = new System.Windows.Forms.Padding(12, 9, 12, 0);
+            this.lblPageSummary.Name = "lblPageSummary";
+            this.lblPageSummary.Size = new System.Drawing.Size(90, 15);
+            this.lblPageSummary.TabIndex = 1;
+            this.lblPageSummary.Text = "Página 1 de 1";
+            //
+            // btnPreviousPage
+            //
+            this.btnPreviousPage.BackColor = System.Drawing.Color.White;
+            this.btnPreviousPage.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(209)))), ((int)(((byte)(213)))), ((int)(((byte)(219)))));
+            this.btnPreviousPage.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnPreviousPage.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(31)))), ((int)(((byte)(41)))), ((int)(((byte)(55)))));
+            this.btnPreviousPage.Location = new System.Drawing.Point(468, 3);
+            this.btnPreviousPage.Margin = new System.Windows.Forms.Padding(0, 3, 8, 3);
+            this.btnPreviousPage.Name = "btnPreviousPage";
+            this.btnPreviousPage.Size = new System.Drawing.Size(98, 27);
+            this.btnPreviousPage.TabIndex = 0;
+            this.btnPreviousPage.Text = "‹ Anterior";
+            this.btnPreviousPage.UseVisualStyleBackColor = false;
             //
             // pnlEditor
             //
@@ -581,7 +701,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
-            this.ClientSize = new System.Drawing.Size(1020, 700);
+            this.ClientSize = new System.Drawing.Size(1020, 780);
             this.Controls.Add(this.tlpRoot);
             this.Font = new System.Drawing.Font("Segoe UI", 9.75F);
             this.MinimumSize = new System.Drawing.Size(900, 640);
@@ -594,6 +714,12 @@
             this.pnlHeader.PerformLayout();
             this.pnlGrid.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.gridProducts)).EndInit();
+            this.tlpPaging.ResumeLayout(false);
+            this.tlpPaging.PerformLayout();
+            this.flpPageSize.ResumeLayout(false);
+            this.flpPageSize.PerformLayout();
+            this.flpPageNav.ResumeLayout(false);
+            this.flpPageNav.PerformLayout();
             this.pnlEditor.ResumeLayout(false);
             this.pnlEditor.PerformLayout();
             this.tlpEditor.ResumeLayout(false);
@@ -621,6 +747,14 @@
         private System.Windows.Forms.DataGridViewTextBoxColumn colCategory;
         private System.Windows.Forms.DataGridViewTextBoxColumn colPrice;
         private System.Windows.Forms.DataGridViewTextBoxColumn colStockQuantity;
+        private System.Windows.Forms.TableLayoutPanel tlpPaging;
+        private System.Windows.Forms.FlowLayoutPanel flpPageSize;
+        private System.Windows.Forms.Label lblPageSize;
+        private System.Windows.Forms.ComboBox cboPageSize;
+        private System.Windows.Forms.FlowLayoutPanel flpPageNav;
+        private System.Windows.Forms.Button btnNextPage;
+        private System.Windows.Forms.Label lblPageSummary;
+        private System.Windows.Forms.Button btnPreviousPage;
         private System.Windows.Forms.Panel pnlEditor;
         private System.Windows.Forms.TableLayoutPanel tlpEditor;
         private System.Windows.Forms.Label lblEditorTitle;

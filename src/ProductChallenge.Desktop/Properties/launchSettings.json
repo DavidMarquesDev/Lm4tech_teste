@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ProductChallenge.Desktop": {
+      "commandName": "Project",
+      "commandLineArgs": "--seed"
+    }
+  }
+}

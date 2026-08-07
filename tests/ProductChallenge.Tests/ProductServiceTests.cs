@@ -18,23 +18,40 @@ public class ProductServiceTests
     private static ProductDraft Draft(string name = "Monitor", string? description = null) =>
         new(name, description, 1899.00m, ProductCategory.Electronics, 8);
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public async Task ListAsync_WithBlankTerm_AsksForEverything(string term)
+    [Fact]
+    public async Task ListAsync_ForwardsTermAndPagingToTheRepository()
     {
-        await _service.ListAsync(term);
+        await _service.ListAsync("monitor", 3, 30);
 
-        Assert.Equal([nameof(IProductRepository.GetAllAsync)], _repository.Calls);
+        Assert.Equal([nameof(IProductRepository.GetPageAsync)], _repository.Calls);
+        Assert.Equal(("monitor", 3, 30), _repository.LastQuery);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task ListAsync_WithPageNumberBelowOne_AsksForTheFirstPage(int pageNumber)
+    {
+        await _service.ListAsync(string.Empty, pageNumber, 10);
+
+        Assert.Equal(1, _repository.LastQuery.PageNumber);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task ListAsync_WithNonPositivePageSize_Throws(int pageSize)
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => _service.ListAsync(string.Empty, 1, pageSize));
     }
 
     [Fact]
-    public async Task ListAsync_WithTerm_DelegatesToSearch()
+    public async Task ListAsync_WithNullTerm_TreatsItAsNoFilter()
     {
-        await _service.ListAsync("monitor");
+        await _service.ListAsync(null!, 1, 10);
 
-        Assert.Equal([nameof(IProductRepository.SearchAsync)], _repository.Calls);
-        Assert.Equal("monitor", _repository.LastSearchTerm);
+        Assert.Equal(string.Empty, _repository.LastQuery.Term);
     }
 
     [Fact]
@@ -94,7 +111,7 @@ public class ProductServiceTests
 
         public List<string> Calls { get; } = [];
 
-        public string? LastSearchTerm { get; private set; }
+        public (string Term, int PageNumber, int PageSize) LastQuery { get; private set; }
 
         public Task<Product> GetByIdAsync(int id)
         {
@@ -111,11 +128,12 @@ public class ProductServiceTests
             return Task.FromResult<IEnumerable<Product>>(Items);
         }
 
-        public Task<IReadOnlyList<Product>> SearchAsync(string term)
+        public Task<PagedResult<Product>> GetPageAsync(string term, int pageNumber, int pageSize)
         {
-            Calls.Add(nameof(SearchAsync));
-            LastSearchTerm = term;
-            return Task.FromResult<IReadOnlyList<Product>>(Items);
+            Calls.Add(nameof(GetPageAsync));
+            LastQuery = (term, pageNumber, pageSize);
+
+            return Task.FromResult(new PagedResult<Product>(Items, Items.Count, pageNumber, pageSize));
         }
 
         public Task AddAsync(Product entity)

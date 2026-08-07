@@ -37,6 +37,7 @@ public partial class MainForm : Form
         BindStatus();
         BindCommands();
         BindSearch();
+        BindPaging();
 
         _viewModel.OperationFailed += OnOperationFailed;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -135,6 +136,28 @@ public partial class MainForm : Form
         // Sem o binder: a confirmação precisa ocorrer antes do comando.
         CommandBinder.BindEnabled(btnDelete, _viewModel.DeleteCommand);
         btnDelete.Click += OnDeleteClick;
+    }
+
+    private void BindPaging()
+    {
+        cboPageSize.DataSource = ProductListViewModel.PageSizeOptions;
+        cboPageSize.SelectedItem = _viewModel.PageSize;
+
+        cboPageSize.SelectedIndexChanged += async (_, _) =>
+        {
+            if (cboPageSize.SelectedItem is int size && size != _viewModel.PageSize)
+            {
+                _viewModel.PageSize = size;
+                await _viewModel.LoadCommand.ExecuteAsync(null);
+            }
+        };
+
+        CommandBinder.Bind(btnPreviousPage, _viewModel.GoToPreviousPageCommand);
+        CommandBinder.Bind(btnNextPage, _viewModel.GoToNextPageCommand);
+
+        lblPageSummary.DataBindings.Add(
+            nameof(Label.Text), _listBinding, nameof(ProductListViewModel.PageSummary),
+            false, DataSourceUpdateMode.Never);
     }
 
     private void BindSearch()

@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using ProductChallenge.Application;
 using ProductChallenge.Application.Abstractions;
 using ProductChallenge.Domain;
 using ProductChallenge.Infrastructure.Persistence;
@@ -36,17 +37,34 @@ public sealed class ProductRepository : IProductRepository
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<Product>> SearchAsync(string term)
+    public async Task<PagedResult<Product>> GetPageAsync(string term, int pageNumber, int pageSize)
     {
-        var pattern = $"%{SearchNormalizer.Normalize(term)}%";
-
         await using var context = await _contextFactory.CreateDbContextAsync();
 
-        return await context.Products
-            .AsNoTracking()
-            .Where(product => EF.Functions.Like(product.SearchText, pattern))
+        var query = context.Products.AsNoTracking();
+        var normalizedTerm = SearchNormalizer.Normalize(term);
+
+        if (normalizedTerm.Length > 0)
+        {
+            var pattern = $"%{normalizedTerm}%";
+            query = query.Where(product => EF.Functions.Like(product.SearchText, pattern));
+        }
+
+        var totalCount = await query.CountAsync();
+
+        // Ajusta a página ao total antes de paginar: pedir a página 5 de um resultado com 2
+        // devolveria uma lista vazia sem explicação.
+        var pageCount = totalCount == 0 ? 1 : (int)Math.Ceiling(totalCount / (double)pageSize);
+        var page = Math.Clamp(pageNumber, 1, pageCount);
+
+        var items = await query
             .OrderBy(product => product.Name)
+            .ThenBy(product => product.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
+
+        return new PagedResult<Product>(items, totalCount, page, pageSize);
     }
 
     public async Task AddAsync(Product entity)

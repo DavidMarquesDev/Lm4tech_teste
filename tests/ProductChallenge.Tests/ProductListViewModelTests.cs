@@ -322,6 +322,143 @@ public class ProductListViewModelTests : IDisposable
         Assert.Equal(2, viewModel.Products.Count);
     }
 
+
+    private async Task SeedAsync(ProductListViewModel viewModel, int quantity)
+    {
+        for (var index = 1; index <= quantity; index++)
+        {
+            FillEditor(viewModel, $"Produto {index:D3}", "10,00", "5", ProductCategory.Toys);
+            await viewModel.SaveCommand.ExecuteAsync(null);
+        }
+    }
+
+    [Fact]
+    public async Task Load_ReturnsOnlyOnePageAtATime()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 40);
+
+        viewModel.PageSize = 10;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.Equal(10, viewModel.Products.Count);
+        Assert.Equal(4, viewModel.PageCount);
+        Assert.Contains("40 produtos", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task GoToNextPage_MovesForwardAndKeepsThePageSize()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 25);
+
+        viewModel.PageSize = 10;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.GoToNextPageCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, viewModel.PageNumber);
+        Assert.Equal(10, viewModel.Products.Count);
+        Assert.Equal("Produto 011", viewModel.Products[0].Name);
+    }
+
+    [Fact]
+    public async Task Navigation_IsDisabledAtTheEdges()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 15);
+
+        viewModel.PageSize = 10;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.False(viewModel.GoToPreviousPageCommand.CanExecute(null));
+        Assert.True(viewModel.GoToNextPageCommand.CanExecute(null));
+
+        await viewModel.GoToNextPageCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.GoToPreviousPageCommand.CanExecute(null));
+        Assert.False(viewModel.GoToNextPageCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ChangingTheSearchTerm_ReturnsToTheFirstPage()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 30);
+
+        viewModel.PageSize = 10;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.GoToNextPageCommand.ExecuteAsync(null);
+        Assert.Equal(2, viewModel.PageNumber);
+
+        viewModel.SearchTerm = "Produto 02";
+
+        Assert.Equal(1, viewModel.PageNumber);
+    }
+
+    [Fact]
+    public async Task ChangingThePageSize_ReturnsToTheFirstPage()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 30);
+
+        viewModel.PageSize = 10;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.GoToNextPageCommand.ExecuteAsync(null);
+
+        viewModel.PageSize = 30;
+
+        Assert.Equal(1, viewModel.PageNumber);
+    }
+
+    [Fact]
+    public async Task Delete_OnTheLastRemainingPage_LandsOnAValidPage()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 11);
+
+        viewModel.PageSize = 10;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        await viewModel.GoToNextPageCommand.ExecuteAsync(null);
+        Assert.Equal(2, viewModel.PageNumber);
+
+        viewModel.SelectedProduct = viewModel.Products.Single();
+        await viewModel.DeleteCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, viewModel.PageNumber);
+        Assert.Equal(10, viewModel.Products.Count);
+    }
+
+    [Fact]
+    public async Task Search_CombinedWithPaging_CountsOnlyMatches()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 30);
+
+        viewModel.PageSize = 10;
+        viewModel.SearchTerm = "Produto 01";
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.Equal(10, viewModel.Products.Count);
+        Assert.Equal(1, viewModel.PageCount);
+        Assert.Contains("10 produtos encontrados", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task PageSummary_ReportsTheCurrentPosition()
+    {
+        var viewModel = CreateViewModel();
+        await SeedAsync(viewModel, 25);
+
+        viewModel.PageSize = 10;
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        Assert.Equal("Página 1 de 3", viewModel.PageSummary);
+
+        await viewModel.GoToNextPageCommand.ExecuteAsync(null);
+
+        Assert.Equal("Página 2 de 3", viewModel.PageSummary);
+    }
+
     [Fact]
     public async Task Mapping_StoresCategoryAsText()
     {

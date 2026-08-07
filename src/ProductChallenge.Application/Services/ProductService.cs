@@ -12,14 +12,14 @@ public sealed class ProductService : IProductService
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     }
 
-    public async Task<IReadOnlyList<Product>> ListAsync(string searchTerm)
+    public Task<PagedResult<Product>> ListAsync(string searchTerm, int pageNumber, int pageSize)
     {
-        if (string.IsNullOrWhiteSpace(searchTerm))
+        if (pageSize <= 0)
         {
-            return (await _repository.GetAllAsync()).ToList();
+            throw new ArgumentOutOfRangeException(nameof(pageSize), "O tamanho da página deve ser positivo.");
         }
 
-        return await _repository.SearchAsync(searchTerm);
+        return _repository.GetPageAsync(searchTerm ?? string.Empty, Math.Max(1, pageNumber), pageSize);
     }
 
     public Task CreateAsync(ProductDraft draft)

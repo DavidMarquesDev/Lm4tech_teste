@@ -8,8 +8,11 @@ namespace ProductChallenge.Desktop;
 
 internal static class Program
 {
+    private const string SeedArgument = "--seed";
+    private const int SampleSize = 100;
+
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
 
@@ -18,6 +21,11 @@ internal static class Program
 
         using var provider = services.BuildServiceProvider();
         provider.MigrateDatabase();
+
+        if (args.Contains(SeedArgument, StringComparer.OrdinalIgnoreCase))
+        {
+            provider.SeedSampleData(SampleSize);
+        }
 
         // Qualificado porque o namespace ProductChallenge.Application deixa "Application"
         // ambíguo neste escopo.
