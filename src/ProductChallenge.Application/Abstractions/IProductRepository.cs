@@ -14,4 +14,7 @@ public interface IProductRepository : IRepository<Product>
     /// disponível, de modo que a tela nunca fica numa página vazia depois de filtrar ou excluir.
     /// </summary>
     Task<PagedResult<Product>> GetPageAsync(string term, int pageNumber, int pageSize);
+
+    /// <summary>Todos os itens que correspondem ao filtro, sem paginar. Usado na exportação.</summary>
+    Task<IReadOnlyList<Product>> ListAsync(string term);
 }

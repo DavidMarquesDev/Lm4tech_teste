@@ -2,7 +2,6 @@
 
 public static class ProductCategoryCatalog
 {
-    // Array concreto porque o ComboBox exige uma origem de dados que implemente IList.
     private static readonly CategoryOption[] AllOptions =
     [
         new CategoryOption(ProductCategory.Electronics, "Eletrônicos"),

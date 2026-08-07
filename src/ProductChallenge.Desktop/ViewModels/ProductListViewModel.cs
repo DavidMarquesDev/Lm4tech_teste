@@ -4,6 +4,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ProductChallenge.Application;
 using ProductChallenge.Application.Abstractions;
+using ProductChallenge.Application.Messaging;
+using ProductChallenge.Application.Reporting;
 using ProductChallenge.Desktop.Common;
 using ProductChallenge.Domain;
 
@@ -19,6 +21,8 @@ public partial class ProductListViewModel : ObservableObject
     public static IReadOnlyList<int> PageSizeOptions => AvailablePageSizes;
 
     private readonly IProductService _productService;
+    private readonly IProductExportService _exportService;
+    private readonly IServiceBus<ProductChangedNotification> _bus;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartEditCommand))]
@@ -50,10 +54,30 @@ public partial class ProductListViewModel : ObservableObject
     [ObservableProperty]
     private string _pageSummary = string.Empty;
 
-    public ProductListViewModel(IProductService productService)
+    public ProductListViewModel(
+        IProductService productService,
+        IProductExportService exportService,
+        IServiceBus<ProductChangedNotification> bus)
     {
         _productService = productService ?? throw new ArgumentNullException(nameof(productService));
+        _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
+        _bus = bus ?? throw new ArgumentNullException(nameof(bus));
     }
+
+    /// <summary>
+    /// Assina as mudanças e faz a primeira carga. Fora do construtor porque trabalho assíncrono
+    /// ali deixaria o objeto observável antes de estar pronto.
+    /// </summary>
+    public async Task InitializeAsync()
+    {
+        await _bus.SubscribeAsync(_ => LoadAsync());
+        await LoadAsync();
+    }
+
+    public IReadOnlyList<ExportField> GetExportableFields() => _exportService.GetAvailableFields();
+
+    public Task<int> ExportAsync(IReadOnlyList<string> fieldNames, Stream destination) =>
+        _exportService.ExportAsync(fieldNames, SearchTerm, destination);
 
     /// <summary>
     /// Como apresentar a falha é decisão da View, o que mantém este ViewModel independente de
@@ -78,8 +102,7 @@ public partial class ProductListViewModel : ObservableObject
 
             PageNumber = page.PageNumber;
             PageCount = page.PageCount;
-            PageSummary = $"Página {page.PageNumber} de {page.PageCount}";
-            StatusMessage = DescribeResult(page.TotalCount, SearchTerm.Trim());
+            PageSummary = DescribeResult(page, SearchTerm.Trim());
         }
         catch (Exception exception) when (exception is DataAccessException or DbException)
         {
@@ -144,7 +167,6 @@ public partial class ProductListViewModel : ObservableObject
             }
 
             Editor.StartNew();
-            await LoadAsync();
         }
         catch (KeyNotFoundException)
         {
@@ -196,7 +218,6 @@ public partial class ProductListViewModel : ObservableObject
         }
 
         IsBusy = false;
-        await LoadAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanGoToPreviousPage))]
@@ -225,23 +246,22 @@ public partial class ProductListViewModel : ObservableObject
 
     private bool HasSelection() => SelectedProduct is not null;
 
-    private static string DescribeResult(int count, string term)
+    private static string DescribeResult(PagedResult<Product> page, string term)
     {
-        if (term.Length > 0)
-        {
-            return count switch
+        var subject = term.Length > 0
+            ? page.TotalCount switch
             {
-                0 => $"Nenhum produto encontrado para \"{term}\".",
-                1 => $"1 produto encontrado para \"{term}\".",
-                _ => $"{count} produtos encontrados para \"{term}\"."
+                0 => $"nenhum resultado para \"{term}\"",
+                1 => $"1 resultado para \"{term}\"",
+                _ => $"{page.TotalCount} resultados para \"{term}\""
+            }
+            : page.TotalCount switch
+            {
+                0 => "nenhum produto cadastrado",
+                1 => "1 produto cadastrado",
+                _ => $"{page.TotalCount} produtos cadastrados"
             };
-        }
 
-        return count switch
-        {
-            0 => "Nenhum produto cadastrado.",
-            1 => "1 produto cadastrado.",
-            _ => $"{count} produtos cadastrados."
-        };
+        return $"Página {page.PageNumber} de {page.PageCount} · {subject}";
     }
 }

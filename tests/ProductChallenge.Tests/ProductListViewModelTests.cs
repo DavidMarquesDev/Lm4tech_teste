@@ -1,8 +1,13 @@
 ﻿using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using ProductChallenge.Application.Messaging;
+using ProductChallenge.Application.Reporting;
 using ProductChallenge.Application.Services;
 using ProductChallenge.Desktop.ViewModels;
 using ProductChallenge.Domain;
+using ProductChallenge.Infrastructure.Messaging;
+using ProductChallenge.Infrastructure.Reporting;
 using ProductChallenge.Infrastructure.Repositories;
 
 namespace ProductChallenge.Tests;
@@ -15,8 +20,30 @@ public class ProductListViewModelTests : IDisposable
 
     public void Dispose() => _database.Dispose();
 
-    private ProductListViewModel CreateViewModel() =>
-        new(new ProductService(new ProductRepository(_database)));
+    /// <summary>Cadeia real de ponta a ponta, só com o banco em memória.</summary>
+    private ProductListViewModel BuildViewModel()
+    {
+        var repository = new ProductRepository(_database);
+        var bus = new InProcessServiceBus<ProductChangedNotification>(
+            NullLogger<InProcessServiceBus<ProductChangedNotification>>.Instance);
+        var service = new ProductService(repository, bus);
+        var writer = new CsvReportWriter(NullLogger<CsvReportWriter>.Instance);
+        var export = new ProductExportService(repository, writer, NullLogger<ProductExportService>.Instance);
+
+        return new ProductListViewModel(service, export, bus);
+    }
+
+    /// <summary>
+    /// Inicializa como a tela faz: assina o barramento e carrega. Sem a assinatura, gravar não
+    /// recarregaria a lista.
+    /// </summary>
+    private async Task<ProductListViewModel> CreateViewModelAsync()
+    {
+        var viewModel = BuildViewModel();
+        await viewModel.InitializeAsync();
+
+        return viewModel;
+    }
 
     private static void FillEditor(
         ProductListViewModel viewModel, string name, string price, string stock, ProductCategory category,
@@ -32,7 +59,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Load_WithoutProducts_LeavesListEmpty()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
 
         await viewModel.LoadCommand.ExecuteAsync(null);
 
@@ -42,7 +69,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Save_WithValidData_PersistsAndRefreshesList()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Notebook", "4.599,90", "12", ProductCategory.Electronics);
 
         await viewModel.SaveCommand.ExecuteAsync(null);
@@ -58,7 +85,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Save_WithValidData_ClearsEditor()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Notebook", "4.599,90", "12", ProductCategory.Electronics);
 
         await viewModel.SaveCommand.ExecuteAsync(null);
@@ -70,7 +97,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Save_WithInvalidData_KeepsDataAndExposesErrors()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await viewModel.LoadCommand.ExecuteAsync(null);
 
         await viewModel.SaveCommand.ExecuteAsync(null);
@@ -82,7 +109,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Save_InEditMode_UpdatesProductWithoutCreatingAnother()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Notebook", "4.599,90", "12", ProductCategory.Electronics);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -100,7 +127,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Delete_RemovesOnlySelectedProduct()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Arroz", "12,49", "300", ProductCategory.Groceries);
         await viewModel.SaveCommand.ExecuteAsync(null);
         FillEditor(viewModel, "Boneca", "89,90", "40", ProductCategory.Toys);
@@ -116,7 +143,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Load_OrdersProductsByName()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Zebra de pelucia", "59,90", "5", ProductCategory.Toys);
         await viewModel.SaveCommand.ExecuteAsync(null);
         FillEditor(viewModel, "Arroz integral", "12,49", "300", ProductCategory.Groceries);
@@ -130,7 +157,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public void EditAndDeleteCommands_RequireSelectedProduct()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = BuildViewModel();
 
         Assert.False(viewModel.StartEditCommand.CanExecute(null));
         Assert.False(viewModel.DeleteCommand.CanExecute(null));
@@ -144,7 +171,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Save_WhenEditedProductWasRemovedElsewhere_NotifiesWithoutThrowing()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Fantasma", "10,00", "1", ProductCategory.Toys);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -168,7 +195,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Save_PersistedData_SurvivesNewContext()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Cabo \"USB-C\", 2m", "39,90", "150", ProductCategory.HomeAndGarden);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -182,7 +209,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Save_PersistsDescription()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Monitor", "1.899,00", "8", ProductCategory.Electronics,
             "27 polegadas, 144 Hz\r\nEntradas: HDMI 2.1, DisplayPort");
 
@@ -195,7 +222,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Search_FiltersByName()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Notebook Dell", "4.599,90", "12", ProductCategory.Electronics);
         await viewModel.SaveCommand.ExecuteAsync(null);
         FillEditor(viewModel, "Arroz integral", "12,49", "300", ProductCategory.Groceries);
@@ -211,7 +238,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Search_AlsoMatchesDescription()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Monitor", "1.899,00", "8", ProductCategory.Electronics, "Painel IPS de 27 polegadas");
         await viewModel.SaveCommand.ExecuteAsync(null);
         FillEditor(viewModel, "Arroz integral", "12,49", "300", ProductCategory.Groceries);
@@ -231,7 +258,7 @@ public class ProductListViewModelTests : IDisposable
     [InlineData("eletrônico")]
     public async Task Search_IgnoresAccentsAndCase(string term)
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Componente eletrônico", "99,90", "5", ProductCategory.Electronics);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -248,7 +275,7 @@ public class ProductListViewModelTests : IDisposable
     [InlineData("Açúcar")]
     public async Task Search_IgnoresCedillaAndTilde(string term)
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Açúcar refinado", "5,49", "80", ProductCategory.Groceries);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -261,7 +288,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Search_WithoutAccents_AlsoMatchesDescription()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Monitor", "1.899,00", "8", ProductCategory.Electronics,
             "Resolução 4K com atualização de 144 Hz");
         await viewModel.SaveCommand.ExecuteAsync(null);
@@ -275,7 +302,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Search_AfterEdit_UsesUpdatedText()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Cadeira", "450,00", "10", ProductCategory.HomeAndGarden);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -296,7 +323,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Search_WithoutMatches_ReportsTermInStatus()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Notebook Dell", "4.599,90", "12", ProductCategory.Electronics);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
@@ -304,13 +331,13 @@ public class ProductListViewModelTests : IDisposable
         await viewModel.LoadCommand.ExecuteAsync(null);
 
         Assert.Empty(viewModel.Products);
-        Assert.Contains("inexistente", viewModel.StatusMessage);
+        Assert.Contains("inexistente", viewModel.PageSummary);
     }
 
     [Fact]
     public async Task Search_WithBlankTerm_ReturnsEverything()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Notebook Dell", "4.599,90", "12", ProductCategory.Electronics);
         await viewModel.SaveCommand.ExecuteAsync(null);
         FillEditor(viewModel, "Arroz integral", "12,49", "300", ProductCategory.Groceries);
@@ -335,7 +362,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Load_ReturnsOnlyOnePageAtATime()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 40);
 
         viewModel.PageSize = 10;
@@ -343,13 +370,13 @@ public class ProductListViewModelTests : IDisposable
 
         Assert.Equal(10, viewModel.Products.Count);
         Assert.Equal(4, viewModel.PageCount);
-        Assert.Contains("40 produtos", viewModel.StatusMessage);
+        Assert.Contains("40 produtos", viewModel.PageSummary);
     }
 
     [Fact]
     public async Task GoToNextPage_MovesForwardAndKeepsThePageSize()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 25);
 
         viewModel.PageSize = 10;
@@ -364,7 +391,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Navigation_IsDisabledAtTheEdges()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 15);
 
         viewModel.PageSize = 10;
@@ -382,7 +409,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task ChangingTheSearchTerm_ReturnsToTheFirstPage()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 30);
 
         viewModel.PageSize = 10;
@@ -398,7 +425,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task ChangingThePageSize_ReturnsToTheFirstPage()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 30);
 
         viewModel.PageSize = 10;
@@ -413,7 +440,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Delete_OnTheLastRemainingPage_LandsOnAValidPage()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 11);
 
         viewModel.PageSize = 10;
@@ -431,7 +458,7 @@ public class ProductListViewModelTests : IDisposable
     [Fact]
     public async Task Search_CombinedWithPaging_CountsOnlyMatches()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 30);
 
         viewModel.PageSize = 10;
@@ -440,29 +467,29 @@ public class ProductListViewModelTests : IDisposable
 
         Assert.Equal(10, viewModel.Products.Count);
         Assert.Equal(1, viewModel.PageCount);
-        Assert.Contains("10 produtos encontrados", viewModel.StatusMessage);
+        Assert.Contains("10 resultados", viewModel.PageSummary);
     }
 
     [Fact]
     public async Task PageSummary_ReportsTheCurrentPosition()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         await SeedAsync(viewModel, 25);
 
         viewModel.PageSize = 10;
         await viewModel.LoadCommand.ExecuteAsync(null);
 
-        Assert.Equal("Página 1 de 3", viewModel.PageSummary);
+        Assert.StartsWith("Página 1 de 3", viewModel.PageSummary);
 
         await viewModel.GoToNextPageCommand.ExecuteAsync(null);
 
-        Assert.Equal("Página 2 de 3", viewModel.PageSummary);
+        Assert.StartsWith("Página 2 de 3", viewModel.PageSummary);
     }
 
     [Fact]
     public async Task Mapping_StoresCategoryAsText()
     {
-        var viewModel = CreateViewModel();
+        var viewModel = await CreateViewModelAsync();
         FillEditor(viewModel, "Camiseta", "49,90", "20", ProductCategory.Apparel);
         await viewModel.SaveCommand.ExecuteAsync(null);
 

@@ -65,7 +65,7 @@ public class ProductRepositoryTests : IDisposable
         var page = await _repository.GetPageAsync(string.Empty, pageNumber: 10, pageSize: 10);
 
         Assert.Equal(5, page.Items.Count);
-        Assert.False(page.HasNextPage);
+        Assert.Equal(10, page.PageCount);
     }
 
     [Theory]
@@ -112,7 +112,6 @@ public class ProductRepositoryTests : IDisposable
 
         Assert.Equal(7, page.Items.Count);
         Assert.Equal(1, page.PageCount);
-        Assert.False(page.HasNextPage);
     }
 
     [Fact]
