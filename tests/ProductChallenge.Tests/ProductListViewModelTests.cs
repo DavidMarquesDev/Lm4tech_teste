@@ -1,7 +1,9 @@
 ﻿using System.Globalization;
 using Microsoft.EntityFrameworkCore;
-using ProductChallenge.Models;
-using ProductChallenge.ViewModels;
+using ProductChallenge.Application.Services;
+using ProductChallenge.Desktop.ViewModels;
+using ProductChallenge.Domain;
+using ProductChallenge.Infrastructure.Repositories;
 
 namespace ProductChallenge.Tests;
 
@@ -13,7 +15,8 @@ public class ProductListViewModelTests : IDisposable
 
     public void Dispose() => _database.Dispose();
 
-    private ProductListViewModel CreateViewModel() => new(_database.CreateContext);
+    private ProductListViewModel CreateViewModel() =>
+        new(new ProductService(new ProductRepository(_database)));
 
     private static void FillEditor(
         ProductListViewModel viewModel, string name, string price, string stock, ProductCategory category,
@@ -148,7 +151,7 @@ public class ProductListViewModelTests : IDisposable
         viewModel.SelectedProduct = viewModel.Products.Single();
         viewModel.StartEditCommand.Execute(null);
 
-        await using (var context = _database.CreateContext())
+        await using (var context = _database.CreateDbContext())
         {
             await context.Products.ExecuteDeleteAsync();
         }
@@ -169,7 +172,7 @@ public class ProductListViewModelTests : IDisposable
         FillEditor(viewModel, "Cabo \"USB-C\", 2m", "39,90", "150", ProductCategory.HomeAndGarden);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        await using var context = _database.CreateContext();
+        await using var context = _database.CreateDbContext();
         var stored = await context.Products.AsNoTracking().SingleAsync();
 
         Assert.Equal("Cabo \"USB-C\", 2m", stored.Name);
@@ -326,7 +329,7 @@ public class ProductListViewModelTests : IDisposable
         FillEditor(viewModel, "Camiseta", "49,90", "20", ProductCategory.Apparel);
         await viewModel.SaveCommand.ExecuteAsync(null);
 
-        await using var context = _database.CreateContext();
+        await using var context = _database.CreateDbContext();
         var category = await context.Database
             .SqlQuery<string>($"SELECT Category AS Value FROM Products LIMIT 1")
             .SingleAsync();

@@ -1,0 +1,292 @@
+﻿using System.ComponentModel;
+using ProductChallenge.Desktop.Common;
+using ProductChallenge.Domain;
+using ProductChallenge.Desktop.ViewModels;
+
+namespace ProductChallenge.Desktop.Views;
+
+public partial class MainForm : Form
+{
+    private readonly ProductListViewModel _viewModel;
+    private readonly BindingSource _productsBinding = new();
+    private readonly BindingSource _editorBinding = new();
+    private readonly BindingSource _listBinding = new();
+    private readonly Dictionary<string, Control> _errorTargets;
+
+    private readonly System.Windows.Forms.Timer _searchDebounce = new() { Interval = 300 };
+
+    private bool _syncingCategory;
+
+    public MainForm(ProductListViewModel viewModel)
+    {
+        _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+
+        InitializeComponent();
+
+        _errorTargets = new Dictionary<string, Control>(StringComparer.Ordinal)
+        {
+            [nameof(ProductEditorViewModel.Name)] = txtName,
+            [nameof(ProductEditorViewModel.Description)] = txtDescription,
+            [nameof(ProductEditorViewModel.SelectedCategory)] = cboCategory,
+            [nameof(ProductEditorViewModel.Price)] = txtPrice,
+            [nameof(ProductEditorViewModel.StockQuantity)] = txtStockQuantity
+        };
+
+        BindGrid();
+        BindEditor();
+        BindStatus();
+        BindCommands();
+        BindSearch();
+
+        _viewModel.OperationFailed += OnOperationFailed;
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        _viewModel.Editor.PropertyChanged += OnEditorPropertyChanged;
+
+        _viewModel.Editor.StartNew();
+
+        // O ComboBox seleciona o primeiro item ao receber a origem de dados, e StartNew não
+        // notifica quando a categoria já era nula.
+        cboCategory.SelectedIndex = -1;
+    }
+
+    protected override async void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        await _viewModel.LoadCommand.ExecuteAsync(null);
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        // A ordem importa: descartar o BindingSource com o grid ainda ligado dispara
+        // SelectionChanged sobre uma linha que já não existe, e DataBoundItem lança.
+        gridProducts.SelectionChanged -= OnGridSelectionChanged;
+        gridProducts.CellFormatting -= OnGridCellFormatting;
+        gridProducts.CellDoubleClick -= OnGridCellDoubleClick;
+        cboCategory.SelectedIndexChanged -= OnCategorySelectionChanged;
+
+        _viewModel.OperationFailed -= OnOperationFailed;
+        _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        _viewModel.Editor.PropertyChanged -= OnEditorPropertyChanged;
+
+        gridProducts.DataSource = null;
+
+        _searchDebounce.Dispose();
+        _productsBinding.Dispose();
+        _editorBinding.Dispose();
+        _listBinding.Dispose();
+
+        base.OnFormClosed(e);
+    }
+
+    private void BindGrid()
+    {
+        _productsBinding.DataSource = _viewModel.Products;
+        gridProducts.DataSource = _productsBinding;
+
+        gridProducts.CellFormatting += OnGridCellFormatting;
+        gridProducts.SelectionChanged += OnGridSelectionChanged;
+        gridProducts.CellDoubleClick += OnGridCellDoubleClick;
+    }
+
+    private void BindEditor()
+    {
+        _editorBinding.DataSource = _viewModel.Editor;
+
+        cboCategory.DisplayMember = nameof(CategoryOption.Label);
+        cboCategory.DataSource = _viewModel.Editor.Categories;
+
+        txtName.DataBindings.Add(
+            nameof(TextBox.Text), _editorBinding, nameof(ProductEditorViewModel.Name),
+            false, DataSourceUpdateMode.OnPropertyChanged);
+
+        txtDescription.DataBindings.Add(
+            nameof(TextBox.Text), _editorBinding, nameof(ProductEditorViewModel.Description),
+            false, DataSourceUpdateMode.OnPropertyChanged);
+
+        txtPrice.DataBindings.Add(
+            nameof(TextBox.Text), _editorBinding, nameof(ProductEditorViewModel.Price),
+            false, DataSourceUpdateMode.OnPropertyChanged);
+
+        txtStockQuantity.DataBindings.Add(
+            nameof(TextBox.Text), _editorBinding, nameof(ProductEditorViewModel.StockQuantity),
+            false, DataSourceUpdateMode.OnPropertyChanged);
+
+        // Sem DataBindings: o WinForms não expõe SelectedItemChanged, então um binding em
+        // SelectedItem só grava na perda de foco — e acionar Salvar por atalho não move o foco.
+        cboCategory.SelectedIndexChanged += OnCategorySelectionChanged;
+    }
+
+    private void BindStatus()
+    {
+        _listBinding.DataSource = _viewModel;
+
+        lblStatus.DataBindings.Add(
+            nameof(Label.Text), _listBinding, nameof(ProductListViewModel.StatusMessage),
+            false, DataSourceUpdateMode.Never);
+    }
+
+    private void BindCommands()
+    {
+        CommandBinder.Bind(btnSave, _viewModel.SaveCommand);
+        CommandBinder.Bind(btnCancel, _viewModel.CancelEditCommand);
+        CommandBinder.Bind(btnNew, _viewModel.StartNewCommand);
+        CommandBinder.Bind(btnEdit, _viewModel.StartEditCommand);
+
+        // Sem o binder: a confirmação precisa ocorrer antes do comando.
+        CommandBinder.BindEnabled(btnDelete, _viewModel.DeleteCommand);
+        btnDelete.Click += OnDeleteClick;
+    }
+
+    private void BindSearch()
+    {
+        txtSearch.TextChanged += (_, _) =>
+        {
+            _searchDebounce.Stop();
+            _searchDebounce.Start();
+        };
+
+        _searchDebounce.Tick += async (_, _) =>
+        {
+            _searchDebounce.Stop();
+            _viewModel.SearchTerm = txtSearch.Text;
+            await _viewModel.LoadCommand.ExecuteAsync(null);
+        };
+    }
+
+    private void OnCategorySelectionChanged(object? sender, EventArgs e)
+    {
+        if (_syncingCategory)
+        {
+            return;
+        }
+
+        _viewModel.Editor.SelectedCategory = cboCategory.SelectedItem as CategoryOption;
+    }
+
+    private void SyncCategorySelection()
+    {
+        var selected = _viewModel.Editor.SelectedCategory;
+
+        if (Equals(cboCategory.SelectedItem, selected))
+        {
+            return;
+        }
+
+        _syncingCategory = true;
+
+        try
+        {
+            if (selected is null)
+            {
+                cboCategory.SelectedIndex = -1;
+            }
+            else
+            {
+                cboCategory.SelectedItem = selected;
+            }
+        }
+        finally
+        {
+            _syncingCategory = false;
+        }
+    }
+
+    private void OnGridCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.ColumnIndex == colCategory.Index && e.Value is ProductCategory category)
+        {
+            e.Value = ProductCategoryCatalog.LabelFor(category);
+            e.FormattingApplied = true;
+        }
+    }
+
+    private void OnGridSelectionChanged(object? sender, EventArgs e)
+    {
+        _viewModel.SelectedProduct = gridProducts.CurrentRow?.DataBoundItem as Product;
+    }
+
+    private void OnGridCellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex >= 0 && _viewModel.StartEditCommand.CanExecute(null))
+        {
+            _viewModel.StartEditCommand.Execute(null);
+            txtName.Focus();
+        }
+    }
+
+    private async void OnDeleteClick(object? sender, EventArgs e)
+    {
+        var product = _viewModel.SelectedProduct;
+
+        if (product is null)
+        {
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            this,
+            $"Excluir o produto \"{product.Name}\"?",
+            "Confirmar exclusão",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        if (answer == DialogResult.Yes)
+        {
+            await _viewModel.DeleteCommand.ExecuteAsync(null);
+        }
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProductListViewModel.IsBusy))
+        {
+            UseWaitCursor = _viewModel.IsBusy;
+        }
+    }
+
+    private void OnEditorPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(ProductEditorViewModel.Errors):
+                ShowValidationErrors();
+                break;
+
+            case nameof(ProductEditorViewModel.SelectedCategory):
+                SyncCategorySelection();
+                break;
+
+            case nameof(ProductEditorViewModel.IsEditing):
+                lblEditorTitle.Text = _viewModel.Editor.IsEditing ? "Editar produto" : "Novo produto";
+                break;
+        }
+    }
+
+    private void ShowValidationErrors()
+    {
+        foreach (var control in _errorTargets.Values)
+        {
+            errorProvider.SetError(control, string.Empty);
+        }
+
+        foreach (var error in _viewModel.Editor.Errors)
+        {
+            if (_errorTargets.TryGetValue(error.FieldName, out var control))
+            {
+                errorProvider.SetError(control, error.Message);
+            }
+        }
+
+        var firstInvalid = _viewModel.Editor.Errors
+            .Select(error => _errorTargets.TryGetValue(error.FieldName, out var control) ? control : null)
+            .FirstOrDefault(control => control is not null);
+
+        firstInvalid?.Focus();
+    }
+
+    private void OnOperationFailed(object? sender, string message)
+    {
+        MessageBox.Show(this, message, "Cadastro de Produtos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+}

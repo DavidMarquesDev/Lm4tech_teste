@@ -15,7 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\ProductChallenge.csproj" />
+    <ProjectReference Include="..\..\src\ProductChallenge.Application\ProductChallenge.Application.csproj" />
+    <ProjectReference Include="..\..\src\ProductChallenge.Desktop\ProductChallenge.Desktop.csproj" />
+    <ProjectReference Include="..\..\src\ProductChallenge.Domain\ProductChallenge.Domain.csproj" />
+    <ProjectReference Include="..\..\src\ProductChallenge.Infrastructure\ProductChallenge.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

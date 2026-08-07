@@ -20,43 +20,38 @@ O desafio é dividido em três fases, cada uma em sua própria branch.
 | Fase | Branch | Situação |
 |------|--------|----------|
 | 1 — Conceitos básicos | `fase1-basico` | Concluída |
-| 2 — Padrões avançados (DI, Generics, Repository) | `fase2-avancado` | Pendente |
+| 2 — Padrões avançados (DI, Generics, Repository) | `fase2-avancado` | Concluída |
 | 3 — Reflection e complexidade | `fase3-complexo` | Pendente |
 
-## Fase 1 — CRUD de produtos
+## Funcionalidades
 
 Tela única de cadastro com `DataGridView` para listagem e painel de edição para as operações
-de inclusão, alteração e exclusão.
+de inclusão, alteração e exclusão, mais busca por nome e descrição.
 
-### Estrutura
+### Arquitetura
 
 ```
-ProductChallenge/
-├── Models/                     Entidade e tipos de domínio
-│   ├── Product.cs              Entidade com invariantes de negócio
-│   ├── ProductCategory.cs      Categorias disponíveis
-│   ├── CategoryOption.cs       Categoria com rótulo de exibição
-│   ├── ProductCategoryCatalog.cs
-│   ├── SearchNormalizer.cs     Texto sem acento e em minúsculas para a busca
-│   └── ProductDraft.cs         Dados validados prontos para a entidade
-├── Data/                       Persistência
-│   ├── AppDbContext.cs
-│   ├── DatabaseLocation.cs
-│   ├── AppDbContextDesignTimeFactory.cs
-│   └── Migrations/
-├── ViewModels/                 Estado e comportamento da tela
-│   ├── ProductListViewModel.cs
-│   └── ProductEditorViewModel.cs
-├── Views/                      Interface
-│   └── MainForm.cs
-├── Common/                     Apoio à ligação de dados e validação
-│   ├── FieldError.cs
-│   ├── BindingListExtensions.cs
-│   └── CommandBinder.cs
-├── tests/
-│   └── ProductChallenge.Tests/
-└── Program.cs                  Ponto de entrada
+src/
+├── ProductChallenge.Domain/          entidade, invariantes e normalização de busca
+│                                     nenhuma dependência externa
+├── ProductChallenge.Application/     contratos e regras de aplicação
+│   ├── Abstractions/                 IRepository<T>, IProductRepository, IProductService
+│   ├── Services/ProductService.cs
+│   └── ProductDraft.cs               dados validados que entram no serviço
+├── ProductChallenge.Infrastructure/  o único projeto que conhece o Entity Framework
+│   ├── Persistence/                  AppDbContext, migrations, localização do banco
+│   ├── Repositories/                 ProductRepository
+│   └── DependencyInjection.cs        registro e migração
+└── ProductChallenge.Desktop/         Windows Forms
+    ├── Views/  ViewModels/  Common/
+    └── Composition/                  composição da raiz de dependências
+tests/
+└── ProductChallenge.Tests/
 ```
+
+As dependências apontam para dentro: `Domain` não referencia ninguém, `Application` declara as
+interfaces sem saber como os dados são gravados, `Infrastructure` implementa, e `Desktop` conhece
+todos porque é a raiz de composição. `ArchitectureTests` falha se essa regra for quebrada.
 
 ### Entidade
 
@@ -97,7 +92,7 @@ Pré-requisitos: [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) 
 
 ```bash
 dotnet build
-dotnet run
+dotnet run --project src/ProductChallenge.Desktop
 ```
 
 Ou abra `ProductChallenge.sln` no Visual Studio 2022 e execute com `F5`.
@@ -106,8 +101,7 @@ Ou abra `ProductChallenge.sln` no Visual Studio 2022 e execute com `F5`.
 
 ```bash
 dotnet tool install --global dotnet-ef --version 8.0.26
-dotnet ef migrations add NomeDaMigration --output-dir Data/Migrations
-dotnet ef database update
+dotnet ef migrations add NomeDaMigration   --project src/ProductChallenge.Infrastructure   --startup-project src/ProductChallenge.Infrastructure   --output-dir Persistence/Migrations
 ```
 
 ## Testes
@@ -116,8 +110,8 @@ dotnet ef database update
 dotnet test
 ```
 
-78 testes cobrindo as invariantes do domínio, a normalização de busca, a validação por campo e o
-CRUD completo.
+91 testes cobrindo as invariantes do domínio, a normalização de busca, a validação por campo, o
+CRUD completo e a regra de dependência entre camadas.
 
 Os testes de CRUD usam **SQLite em memória** (`Filename=:memory:` com a conexão mantida aberta),
 não o provider InMemory do EF. O provider InMemory não aplica as restrições do mapeamento nem
@@ -132,9 +126,17 @@ abrir janela porque não referenciam `System.Windows.Forms`.
   Adotar `Guid` agora custaria refazer entidade, migration e ViewModels.
 - **SQLite em vez do provider InMemory** — o enunciado permite os dois. O InMemory é um dublê
   para testes: não persiste entre execuções nem permite demonstrar Migrations.
-- **Sem DI e sem Repository nesta fase** — omissão deliberada. O objetivo declarado da Fase 2 é
-  *refatorar* aplicando DI, Generics e Repository Pattern; entregar isso agora deixaria aquela
-  branch sem conteúdo. O ViewModel recebe `Func<AppDbContext>` e cria um contexto por operação.
+- **`IProductRepository` além do `IRepository<T>`** — o repositório genérico cobre o CRUD, mas
+  não tem como expressar uma consulta de domínio. A busca por texto entra num contrato específico
+  em vez de virar filtro em memória sobre `GetAllAsync`, que carregaria a tabela inteira.
+- **`IRepository<T>` transcrito do enunciado sem alterações** — sem `CancellationToken`, e o
+  `Task<T>` não anulável resolvido com `KeyNotFoundException` em vez de `null`.
+- **`DataAccessException`** — a Infrastructure traduz falhas do Entity Framework para um tipo da
+  camada Application. Sem isso o Desktop precisaria referenciar o EF Core só para nomear
+  `DbUpdateException`, e a separação de camadas cairia por terra.
+- **Repositório e serviço `Transient`, ViewModel e Form `Singleton`** — ambos são sem estado e
+  criam um contexto por operação, então nada obsoleto fica retido dentro do consumidor de vida
+  longa.
 - **Sem `ILogger`, sem Reflection, sem Service Bus** — são requisitos da Fase 3.
 - **Validação em duas camadas** — `TryBuildDraft()` produz mensagens amigáveis por campo; as
   verificações em `Product.SetDetails` são a rede de segurança do domínio. Uma exceção ali indica
@@ -166,7 +168,8 @@ ausentes num sistema real:
 
 | Item | Motivo |
 |------|--------|
-| Testes automatizados | Sem eles não há rede de segurança para o refactor da Fase 2 |
+| Testes automatizados | Sem eles não haveria rede de segurança para o refactor da Fase 2 |
+| `ArchitectureTests` | Sem eles a regra de dependência é só um acordo que ninguém confere quando alguém adiciona um `using` conveniente |
 | Campo `Description` | Os cinco campos exigidos continuam presentes; a ficha técnica torna o cadastro utilizável e dá substância à seleção de colunas da exportação prevista na Fase 3 |
 | Busca por nome e descrição, insensível a acento e caixa | Uma lista sem filtro deixa de ser navegável já na casa das dezenas de itens, e num cadastro em português exigir o acento correto inviabiliza a busca |
 | Evento `OperationFailed` | Uma falha de banco não pode desaparecer em silêncio |

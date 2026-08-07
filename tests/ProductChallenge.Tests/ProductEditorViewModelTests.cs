@@ -1,6 +1,6 @@
 ﻿using System.Globalization;
-using ProductChallenge.Models;
-using ProductChallenge.ViewModels;
+using ProductChallenge.Domain;
+using ProductChallenge.Desktop.ViewModels;
 
 namespace ProductChallenge.Tests;
 
